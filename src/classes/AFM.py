@@ -1,4 +1,6 @@
+
 import os
+import time
 from urllib.parse import urlparse
 from typing import Any
 
@@ -7,12 +9,17 @@ from config import *
 from constants import *
 from llm_provider import generate_text
 from .Twitter import Twitter
-from selenium_firefox import *
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
 from webdriver_manager.firefox import GeckoDriverManager
+from selenium import webdriver
+
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
+
 
 
 class AffiliateMarketing:
@@ -46,26 +53,9 @@ class AffiliateMarketing:
         # Initialize the Firefox profile
         self.options: Options = Options()
 
-        # Set headless state of browser
-        if get_headless():
-            self.options.add_argument("--headless")
-
-        if not os.path.isdir(fp_profile_path):
-            raise ValueError(
-                f"Firefox profile path does not exist or is not a directory: {fp_profile_path}"
-            )
-
-        # Set the profile path
-        self.options.add_argument("-profile")
-        self.options.add_argument(fp_profile_path)
-
-        # Set the service
-        self.service: Service = Service(GeckoDriverManager().install())
-
-        # Initialize the browser
-        self.browser: webdriver.Firefox = webdriver.Firefox(
-            service=self.service, options=self.options
-        )
+        self.browser = None
+        self._fp_profile_path = fp_profile_path
+        self._scraper = get_outreach_scraper()
 
         # Set the affiliate link
         self.affiliate_link: str = affiliate_link
@@ -88,33 +78,74 @@ class AffiliateMarketing:
         # Scrape the product information
         self.scrape_product_information()
 
+
     def scrape_product_information(self) -> None:
         """
         This method will be used to scrape the product
-        information from the affiliate link.
+        information from the affiliate link using Playwright for better bypass.
         """
-        # Open the affiliate link
-        self.browser.get(self.affiliate_link)
+        scraper = get_outreach_scraper()
 
-        # Get the product name
-        product_title: str = self.browser.find_element(
-            By.ID, AMAZON_PRODUCT_TITLE_ID
-        ).text
+        if scraper == "playwright" and sync_playwright:
+            if get_verbose():
+                info("Using Playwright to scrape Amazon product...")
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=get_headless())
+                page = browser.new_page()
+                page.goto(self.affiliate_link, timeout=60000)
+                page.wait_for_load_state("domcontentloaded") # wait for page to render
 
-        # Get the features of the product
-        features: Any = self.browser.find_elements(By.ID, AMAZON_FEATURE_BULLETS_ID)
+                try:
+                    product_title = page.locator("#productTitle").text_content()
+                except Exception:
+                    product_title = page.title()
+
+                try:
+                    features_list = page.locator("#feature-bullets").text_content()
+                except Exception:
+                    features_list = "Product features not found via playwright."
+
+                browser.close()
+
+            self.product_title = product_title.strip() if product_title else "Unknown Title"
+            self.features = features_list.strip() if features_list else "No features listed"
+
+        else:
+            if get_verbose():
+                info("Using Selenium to scrape Amazon product...")
+
+            self.options = Options()
+            if get_headless():
+                self.options.add_argument("--headless")
+            if not os.path.isdir(self._fp_profile_path):
+                raise ValueError(f"Firefox profile path does not exist: {self._fp_profile_path}")
+            self.options.add_argument("-profile")
+            self.options.add_argument(self._fp_profile_path)
+            self.service = Service(GeckoDriverManager().install())
+            self.browser = webdriver.Firefox(service=self.service, options=self.options)
+
+            # Open the affiliate link
+            self.browser.get(self.affiliate_link)
+
+            try:
+                product_title = self.browser.find_element(
+                    By.ID, AMAZON_PRODUCT_TITLE_ID
+                ).text
+            except Exception:
+                product_title = self.browser.title
+
+            try:
+                features = self.browser.find_element(By.ID, AMAZON_FEATURE_BULLETS_ID).text
+            except Exception:
+                features = "Product features not found via selenium."
+
+            self.product_title = product_title
+            self.features = features
 
         if get_verbose():
-            info(f"Product Title: {product_title}")
+            info(f"Product Title: {self.product_title}")
+            info(f"Features: {self.features}")
 
-        if get_verbose():
-            info(f"Features: {features}")
-
-        # Set the product title
-        self.product_title: str = product_title
-
-        # Set the features
-        self.features: Any = features
 
     def generate_response(self, prompt: str) -> str:
         """
@@ -172,5 +203,5 @@ class AffiliateMarketing:
         """
         This method will be used to quit the browser.
         """
-        # Quit the browser
-        self.browser.quit()
+        if self.browser:
+            self.browser.quit()

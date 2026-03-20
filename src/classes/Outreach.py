@@ -14,6 +14,18 @@ import platform
 from cache import *
 from status import *
 from config import *
+from llm_provider import generate_text
+
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
+
+try:
+    import resend
+except ImportError:
+    resend = None
+
 
 
 class Outreach:
@@ -196,101 +208,164 @@ class Outreach:
                 csvwriter = csv.writer(csvfile)
                 csvwriter.writerows(items)
 
+
     def start(self) -> None:
         """
         Start the outreach process.
-
-        Returns:
-            None
         """
-        # Check if go is installed
-        if not self.is_go_installed():
-            error("Go is not installed. Please install go and try again.")
-            return
-
-        # Unzip the scraper
-        self.unzip_file(get_google_maps_scraper_zip_url())
-
-        # Build the scraper
-        self.build_scraper()
-
-        # Write the niche to a file
-        with open("niche.txt", "w") as f:
-            f.write(self.niche)
+        scraper_choice = get_outreach_scraper()
+        email_provider = get_email_provider()
 
         output_path = get_results_cache_path()
         message_subject = get_outreach_message_subject()
         message_body = get_outreach_message_body_file()
 
-        # Run
-        self.run_scraper_with_args_for_30_seconds(
-            f'-input niche.txt -results "{output_path}"', timeout=get_scraper_timeout()
-        )
+        if scraper_choice == "playwright" and sync_playwright:
+            info(" => Using Playwright to scrape Google Maps data...")
+            items = []
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=get_headless())
+                page = browser.new_page()
+                page.goto(f"https://www.google.com/maps/search/{self.niche.replace(' ', '+')}", timeout=60000)
+                try:
+                    page.wait_for_selector("a[href^='http']", timeout=60000)
+                except Exception:
+                    pass
 
-        if not os.path.exists(output_path):
-            error(
-                f" => Scraper output not found at {output_path}. Check scraper logs and configuration."
+                elements = page.query_selector_all("a[href^='http']")
+                for el in elements[:10]:
+                    link = el.get_attribute("href")
+                    # Try to get the text of the link for the name, or parent elements
+                    name = el.text_content().strip().replace(',', ' ')
+                    if not name:
+                        name = "FoundBusiness"
+                    if link and "google.com" not in link:
+                        items.append(f"{name},,,{link}")
+                browser.close()
+
+            success(f" => Scraped {len(items)} potential links.")
+            # Mock writing to output file
+            with open(output_path, "w") as f:
+                f.write("Name,Address,Phone,Website\n")
+                for item in items:
+                    f.write(f"{item}\n")
+        else:
+            # Check if go is installed
+            if not self.is_go_installed():
+                error("Go is not installed. Please install go and try again.")
+                return
+
+            # Unzip the scraper
+            self.unzip_file(get_google_maps_scraper_zip_url())
+
+            # Build the scraper
+            self.build_scraper()
+
+            # Write the niche to a file
+            with open("niche.txt", "w") as f:
+                f.write(self.niche)
+
+            # Run
+            self.run_scraper_with_args_for_30_seconds(
+                f'-input niche.txt -results "{output_path}"', timeout=get_scraper_timeout()
             )
-            os.remove("niche.txt")
-            return
 
-        # Get the items from the file
-        items = self.get_items_from_file(output_path)
-        success(f" => Scraped {len(items)} items.")
+            if not os.path.exists(output_path):
+                error(
+                    f" => Scraper output not found at {output_path}. Check scraper logs and configuration."
+                )
+                if os.path.exists("niche.txt"): os.remove("niche.txt")
+                return
 
-        # Remove the niche file
-        os.remove("niche.txt")
+            # Get the items from the file
+            items = self.get_items_from_file(output_path)
+            success(f" => Scraped {len(items)} items.")
+
+            # Remove the niche file
+            if os.path.exists("niche.txt"): os.remove("niche.txt")
 
         time.sleep(2)
 
-        # Create a yagmail SMTP client outside the loop
-        yag = yagmail.SMTP(
-            user=self.email_creds["username"],
-            password=self.email_creds["password"],
-            host=self.email_creds["smtp_server"],
-            port=self.email_creds["smtp_port"],
-        )
+        yag = None
+        if email_provider == "smtp":
+            yag = yagmail.SMTP(
+                user=self.email_creds["username"],
+                password=self.email_creds["password"],
+                host=self.email_creds["smtp_server"],
+                port=self.email_creds["smtp_port"],
+            )
+        elif email_provider == "resend" and resend:
+            resend.api_key = get_resend_api_key()
+            if not resend.api_key:
+                error("Resend API key is missing.")
+                return
 
         # Get the email for each business
         for index, item in enumerate(items, start=1):
             try:
                 # Check if the item"s website is valid
-                website = item.split(",")
-                website = [w for w in website if w.startswith("http")]
+                parts = item.split(",")
+                website = [w for w in parts if w.startswith("http")]
                 website = website[0] if len(website) > 0 else ""
-                if website != "":
+
+                receiver_email = parts[-1] if "@" in parts[-1] else ""
+
+                if website != "" and not receiver_email:
                     test_r = requests.get(website)
                     if test_r.status_code == 200:
                         self.set_email_for_website(index, website, output_path)
 
-                        # Send emails using the existing SMTP connection
-                        receiver_email = item.split(",")[-1]
+                        # Re-read to get updated email if found
+                        with open(output_path, "r") as f:
+                            lines = f.readlines()
+                            if len(lines) > index:
+                                import csv
+                                reader = csv.reader([lines[index].strip()])
+                                updated_parts = next(reader)
+                                if "@" in updated_parts[-1]:
+                                    receiver_email = updated_parts[-1]
 
-                        if "@" not in receiver_email:
-                            warning(f" => No email provided. Skipping...")
-                            continue
+                if not receiver_email or "@" not in receiver_email:
+                    warning(f" => No email provided/found for {website}. Skipping...")
+                    continue
 
-                        company_name = item.split(",")[0]
-                        subject = message_subject.replace(
-                            "{{COMPANY_NAME}}", company_name
-                        )
-                        body = (
-                            open(message_body, "r")
-                            .read()
-                            .replace("{{COMPANY_NAME}}", company_name)
-                        )
+                company_name = parts[0] if len(parts) > 0 else "there"
 
-                        info(f" => Sending email to {receiver_email}...")
+                # Optionally use LLM to personalize the body
+                base_body = open(message_body, "r").read() if os.path.exists(message_body) else "Hello {{COMPANY_NAME}},\n\nI\'d like to work with you."
 
-                        yag.send(
-                            to=receiver_email,
-                            subject=subject,
-                            contents=body,
-                        )
+                if get_llm_provider():
+                    try:
+                        info(f" => Generating personalized email body for {company_name}...")
+                        prompt = f"Rewrite this cold outreach email to be highly personalized for a company named '{company_name}' whose website is '{website}'. Base Template: {base_body}"
+                        personalized_body = generate_text(prompt)
+                    except Exception as e:
+                        error(f"Failed to personalize with LLM: {e}")
+                        personalized_body = base_body.replace("{{COMPANY_NAME}}", company_name)
+                else:
+                    personalized_body = base_body.replace("{{COMPANY_NAME}}", company_name)
 
-                        success(f" => Sent email to {receiver_email}")
-                    else:
-                        warning(f" => Website {website} is invalid. Skipping...")
+                subject = message_subject.replace("{{COMPANY_NAME}}", company_name)
+
+                info(f" => Sending email to {receiver_email}...")
+
+                if email_provider == "resend" and resend:
+                    from_email = get_resend_from_email()
+                    r = resend.Emails.send({
+                        "from": from_email,
+                        "to": receiver_email,
+                        "subject": subject,
+                        "html": personalized_body
+                    })
+                    success(f" => Sent email to {receiver_email} via Resend: {r}")
+                elif yag:
+                    yag.send(
+                        to=receiver_email,
+                        subject=subject,
+                        contents=personalized_body,
+                    )
+                    success(f" => Sent email to {receiver_email} via SMTP")
+
             except Exception as err:
-                error(f" => Error: {err}...")
+                error(f" => Error processing item: {err}...")
                 continue

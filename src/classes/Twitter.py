@@ -70,7 +70,7 @@ class Twitter:
         )
         self.wait: WebDriverWait = WebDriverWait(self.browser, 30)
 
-    def post(self, text: Optional[str] = None) -> None:
+    def post(self, text: Optional[str] = None, image_path: Optional[str] = None) -> None:
         """
         Starts the Twitter Bot.
 
@@ -113,7 +113,14 @@ class Twitter:
             )
 
 
+
+        if image_path and os.path.exists(image_path):
+            file_input = bot.find_element(By.CSS_SELECTOR, "input[data-testid='fileInput']")
+            file_input.send_keys(os.path.abspath(image_path))
+            self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-testid='tweetPhoto']"))) # wait for image upload preview
+
         post_button = None
+
         post_button_selectors = [
             (By.XPATH, "//button[@data-testid='tweetButtonInline']"),
             (By.XPATH, "//button[@data-testid='tweetButton']"),

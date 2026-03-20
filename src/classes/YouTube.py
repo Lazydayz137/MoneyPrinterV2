@@ -377,6 +377,79 @@ class YouTube:
                 warning(f"Failed to generate image with Nano Banana 2 API: {str(e)}")
             return None
 
+
+    def generate_image_fal(self, prompt: str) -> str:
+        """
+        Generates an AI Image using Fal.ai (FLUX).
+        """
+        import requests
+        print(f"Generating Image using Fal.ai (FLUX): {prompt}")
+
+        api_key = get_fal_api_key()
+        if not api_key:
+            error("fal_api_key is not configured.")
+            return None
+
+        # Fal.ai FLUX endpoint
+        endpoint = "https://fal.run/fal-ai/flux/schnell"
+        headers = {
+            "Authorization": f"Key {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "prompt": prompt,
+            "image_size": "portrait_16_9",
+            "num_inference_steps": 4,
+            "num_images": 1
+        }
+
+        try:
+            response = requests.post(endpoint, json=payload, headers=headers, timeout=300)
+            response.raise_for_status()
+            data = response.json()
+            image_url = data["images"][0]["url"]
+
+            # Download the image
+            image_response = requests.get(image_url, timeout=300)
+            image_response.raise_for_status()
+            return self._persist_image(image_response.content, provider_label="Fal.ai")
+        except Exception as e:
+            error(f"Fal.ai Image generation failed: {str(e)}")
+            return None
+
+    def generate_image_openai(self, prompt: str) -> str:
+        """
+        Generates an AI Image using OpenAI DALL-E 3.
+        """
+        import requests
+        from openai import OpenAI
+        print(f"Generating Image using OpenAI DALL-E 3: {prompt}")
+
+        api_key = get_openai_api_key()
+        if not api_key:
+            error("openai_api_key is not configured.")
+            return None
+
+        client = OpenAI(api_key=api_key)
+
+        try:
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=prompt,
+                size="1024x1792",
+                quality="standard",
+                n=1,
+            )
+            image_url = response.data[0].url
+
+            # Download the image
+            image_response = requests.get(image_url, timeout=300)
+            image_response.raise_for_status()
+            return self._persist_image(image_response.content, provider_label="OpenAI")
+        except Exception as e:
+            error(f"OpenAI Image generation failed: {str(e)}")
+            return None
+
     def generate_image(self, prompt: str) -> str:
         """
         Generates an AI Image based on the given prompt using Nano Banana 2.
@@ -387,7 +460,16 @@ class YouTube:
         Returns:
             path (str): The path to the generated image.
         """
-        return self.generate_image_nanobanana2(prompt)
+
+        provider = get_image_provider()
+
+        if provider == "fal":
+            return self.generate_image_fal(prompt)
+        elif provider == "openai":
+            return self.generate_image_openai(prompt)
+        else:
+            return self.generate_image_nanobanana2(prompt)
+
 
     def generate_script_to_speech(self, tts_instance: TTS) -> str:
         """
