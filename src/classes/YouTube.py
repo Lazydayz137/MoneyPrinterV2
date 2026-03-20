@@ -404,15 +404,15 @@ class YouTube:
         }
 
         try:
-            response = requests.post(endpoint, json=payload, headers=headers)
+            response = requests.post(endpoint, json=payload, headers=headers, timeout=300)
             response.raise_for_status()
             data = response.json()
             image_url = data["images"][0]["url"]
 
             # Download the image
-            image_response = requests.get(image_url)
+            image_response = requests.get(image_url, timeout=300)
             image_response.raise_for_status()
-            return self._save_image_bytes(image_response.content, provider_label="Fal.ai")
+            return self._persist_image(image_response.content, provider_label="Fal.ai")
         except Exception as e:
             error(f"Fal.ai Image generation failed: {str(e)}")
             return None
@@ -443,9 +443,9 @@ class YouTube:
             image_url = response.data[0].url
 
             # Download the image
-            image_response = requests.get(image_url)
+            image_response = requests.get(image_url, timeout=300)
             image_response.raise_for_status()
-            return self._save_image_bytes(image_response.content, provider_label="OpenAI")
+            return self._persist_image(image_response.content, provider_label="OpenAI")
         except Exception as e:
             error(f"OpenAI Image generation failed: {str(e)}")
             return None

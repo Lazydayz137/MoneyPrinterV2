@@ -117,7 +117,7 @@ class Twitter:
         if image_path and os.path.exists(image_path):
             file_input = bot.find_element(By.CSS_SELECTOR, "input[data-testid='fileInput']")
             file_input.send_keys(os.path.abspath(image_path))
-            time.sleep(2) # wait for image upload preview
+            self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-testid='tweetPhoto']"))) # wait for image upload preview
 
         post_button = None
 

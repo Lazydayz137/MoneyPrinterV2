@@ -227,15 +227,20 @@ class Outreach:
                 browser = p.chromium.launch(headless=get_headless())
                 page = browser.new_page()
                 page.goto(f"https://www.google.com/maps/search/{self.niche.replace(' ', '+')}", timeout=60000)
-                time.sleep(5) # Wait for results
+                try:
+                    page.wait_for_selector("a[href^='http']", timeout=60000)
+                except Exception:
+                    pass
 
-                # Extremely simplified scraping for demonstration
-                # A real maps scraper is complex and requires scrolling
                 elements = page.query_selector_all("a[href^='http']")
                 for el in elements[:10]:
                     link = el.get_attribute("href")
+                    # Try to get the text of the link for the name, or parent elements
+                    name = el.text_content().strip().replace(',', ' ')
+                    if not name:
+                        name = "FoundBusiness"
                     if link and "google.com" not in link:
-                        items.append(f"FoundBusiness,,,{link}")
+                        items.append(f"{name},,,{link}")
                 browser.close()
 
             success(f" => Scraped {len(items)} potential links.")
@@ -314,7 +319,9 @@ class Outreach:
                         with open(output_path, "r") as f:
                             lines = f.readlines()
                             if len(lines) > index:
-                                updated_parts = lines[index].strip().split(",")
+                                import csv
+                                reader = csv.reader([lines[index].strip()])
+                                updated_parts = next(reader)
                                 if "@" in updated_parts[-1]:
                                     receiver_email = updated_parts[-1]
 
@@ -343,8 +350,9 @@ class Outreach:
                 info(f" => Sending email to {receiver_email}...")
 
                 if email_provider == "resend" and resend:
+                    from_email = get_resend_from_email()
                     r = resend.Emails.send({
-                        "from": "onboarding@resend.dev", # Need a verified domain in reality
+                        "from": from_email,
                         "to": receiver_email,
                         "subject": subject,
                         "html": personalized_body

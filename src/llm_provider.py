@@ -89,7 +89,8 @@ def generate_text(prompt: str, model_name: str = None) -> str:
 
     else:
         # Default to Ollama
-        model = model_name or _selected_model
+        from config import get_ollama_model
+        model = model_name or _selected_model or get_ollama_model()
         if not model:
             raise RuntimeError(
                 "No Ollama model selected. Call select_model() first or pass model_name."

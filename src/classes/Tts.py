@@ -25,10 +25,12 @@ class TTS:
                 raise ValueError("ElevenLabs API key is missing. Please set it in config.json.")
             self._elevenlabs_client = ElevenLabs(api_key=api_key)
             self._voice = get_elevenlabs_voice_id() or "Rachel"
-        else:
+        elif self._provider == "edge-tts":
             # Default fallback to KittenTTS / edge-tts equivalent
             self._model = KittenModel(KITTEN_MODEL)
             self._voice = get_tts_voice()
+        else:
+            raise ValueError(f"Unknown TTS provider: {self._provider}. Please choose 'elevenlabs' or 'edge-tts' in config.json.")
 
     def synthesize(self, text, output_file=os.path.join(ROOT_DIR, ".mp", "audio.wav")):
         if self._provider == "elevenlabs":
@@ -46,10 +48,12 @@ class TTS:
                     if chunk:
                         f.write(chunk)
             return output_file
-        else:
+        elif self._provider == "edge-tts":
             if get_verbose():
                 print(f"Synthesizing using KittenTTS Voice: {self._voice}")
 
             audio = self._model.generate(text, voice=self._voice)
             sf.write(output_file, audio, KITTEN_SAMPLE_RATE)
             return output_file
+        else:
+            raise ValueError(f"Unknown TTS provider: {self._provider}.")

@@ -53,26 +53,9 @@ class AffiliateMarketing:
         # Initialize the Firefox profile
         self.options: Options = Options()
 
-        # Set headless state of browser
-        if get_headless():
-            self.options.add_argument("--headless")
-
-        if not os.path.isdir(fp_profile_path):
-            raise ValueError(
-                f"Firefox profile path does not exist or is not a directory: {fp_profile_path}"
-            )
-
-        # Set the profile path
-        self.options.add_argument("-profile")
-        self.options.add_argument(fp_profile_path)
-
-        # Set the service
-        self.service: Service = Service(GeckoDriverManager().install())
-
-        # Initialize the browser
-        self.browser: webdriver.Firefox = webdriver.Firefox(
-            service=self.service, options=self.options
-        )
+        self.browser = None
+        self._fp_profile_path = fp_profile_path
+        self._scraper = get_outreach_scraper()
 
         # Set the affiliate link
         self.affiliate_link: str = affiliate_link
@@ -110,7 +93,7 @@ class AffiliateMarketing:
                 browser = p.chromium.launch(headless=get_headless())
                 page = browser.new_page()
                 page.goto(self.affiliate_link, timeout=60000)
-                time.sleep(3) # wait for page to render
+                page.wait_for_load_state("domcontentloaded") # wait for page to render
 
                 try:
                     product_title = page.locator("#productTitle").text_content()
@@ -130,6 +113,17 @@ class AffiliateMarketing:
         else:
             if get_verbose():
                 info("Using Selenium to scrape Amazon product...")
+
+            self.options = Options()
+            if get_headless():
+                self.options.add_argument("--headless")
+            if not os.path.isdir(self._fp_profile_path):
+                raise ValueError(f"Firefox profile path does not exist: {self._fp_profile_path}")
+            self.options.add_argument("-profile")
+            self.options.add_argument(self._fp_profile_path)
+            self.service = Service(GeckoDriverManager().install())
+            self.browser = webdriver.Firefox(service=self.service, options=self.options)
+
             # Open the affiliate link
             self.browser.get(self.affiliate_link)
 
@@ -209,5 +203,5 @@ class AffiliateMarketing:
         """
         This method will be used to quit the browser.
         """
-        # Quit the browser
-        self.browser.quit()
+        if self.browser:
+            self.browser.quit()
