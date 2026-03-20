@@ -2,33 +2,53 @@
   "verbose": true,
   "firefox_profile": "",
   "headless": false,
+
+  "llm_provider": "ollama",
   "ollama_base_url": "http://127.0.0.1:11434",
   "ollama_model": "",
-  "twitter_language": "English",
+  "openrouter_api_key": "",
+  "openrouter_model": "anthropic/claude-3-5-sonnet",
+
+  "image_provider": "nanobanana2",
   "nanobanana2_api_base_url": "https://generativelanguage.googleapis.com/v1beta",
   "nanobanana2_api_key": "",
   "nanobanana2_model": "gemini-3.1-flash-image-preview",
   "nanobanana2_aspect_ratio": "9:16",
+  "fal_api_key": "",
+  "openai_api_key": "",
+
+  "twitter_language": "English",
   "threads": 2,
   "zip_url": "",
   "is_for_kids": false,
+
+  "outreach_scraper": "playwright",
   "google_maps_scraper": "https://github.com/gosom/google-maps-scraper/archive/refs/tags/v0.9.7.zip",
+  "google_maps_scraper_niche": "",
+  "scraper_timeout": 300,
+
+  "email_provider": "smtp",
   "email": {
     "smtp_server": "smtp.gmail.com",
     "smtp_port": 587,
     "username": "",
     "password": ""
   },
-  "google_maps_scraper_niche": "",
-  "scraper_timeout": 300,
+  "resend_api_key": "",
   "outreach_message_subject": "I have a question...",
   "outreach_message_body_file": "outreach_message.html",
+
   "stt_provider": "local_whisper",
   "whisper_model": "base",
   "whisper_device": "auto",
   "whisper_compute_type": "int8",
   "assembly_ai_api_key": "",
+
+  "tts_provider": "edge-tts",
   "tts_voice": "Jasper",
+  "elevenlabs_api_key": "",
+  "elevenlabs_voice_id": "",
+
   "font": "bold_font.ttf",
   "imagemagick_path": "Path to magick.exe or on linux/macOS just /usr/bin/convert",
   "script_sentence_length": 4

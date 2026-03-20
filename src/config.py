@@ -339,3 +339,91 @@ def get_script_sentence_length() -> int:
             return config_json["script_sentence_length"]
         else:
             return 4
+
+# =======================
+# NEW CONFIGURATION OPTS
+# =======================
+
+def get_llm_provider() -> str:
+    """
+    Gets the LLM provider (ollama or openrouter).
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("llm_provider", "ollama")
+
+def get_openrouter_api_key() -> str:
+    """
+    Gets the OpenRouter API key.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("openrouter_api_key", "")
+
+def get_openrouter_model() -> str:
+    """
+    Gets the OpenRouter model.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("openrouter_model", "anthropic/claude-3-5-sonnet")
+
+def get_image_provider() -> str:
+    """
+    Gets the image provider (nanobanana2, fal, or openai).
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("image_provider", "nanobanana2")
+
+def get_fal_api_key() -> str:
+    """
+    Gets the fal.ai API key.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("fal_api_key", "")
+
+def get_openai_api_key() -> str:
+    """
+    Gets the OpenAI API key.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("openai_api_key", "")
+
+def get_outreach_scraper() -> str:
+    """
+    Gets the scraper to use for outreach (playwright or golang).
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("outreach_scraper", "golang")
+
+def get_email_provider() -> str:
+    """
+    Gets the email provider (smtp or resend).
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("email_provider", "smtp")
+
+def get_resend_api_key() -> str:
+    """
+    Gets the Resend API key.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("resend_api_key", "")
+
+def get_tts_provider() -> str:
+    """
+    Gets the TTS provider (edge-tts or elevenlabs).
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("tts_provider", "edge-tts")
+
+def get_elevenlabs_api_key() -> str:
+    """
+    Gets the ElevenLabs API key.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("elevenlabs_api_key", "")
+
+def get_elevenlabs_voice_id() -> str:
+    """
+    Gets the ElevenLabs Voice ID.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("elevenlabs_voice_id", "")
